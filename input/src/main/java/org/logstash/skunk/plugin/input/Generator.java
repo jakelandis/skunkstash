@@ -12,6 +12,7 @@ public class Generator implements Input {
 
     @Override
     public void start(Configuration configuration, WriteQueue queue) {
+
         while(true){
             queue.put(new Event(){});
             try {
@@ -21,5 +22,4 @@ public class Generator implements Input {
             }
         }
     }
-
 }
