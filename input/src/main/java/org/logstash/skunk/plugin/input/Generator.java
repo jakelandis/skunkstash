@@ -10,16 +10,32 @@ import org.logstash.skunk.api.plugin.LogStashPlugin;
 @LogStashPlugin("generator")
 public class Generator implements Input {
 
-    @Override
-    public void start(Configuration configuration, WriteQueue queue) {
+    boolean running;
 
-        while(true){
-            queue.put(new Event(){});
+    @Override
+    public void start(Configuration configuration, WriteQueue queue){
+        running = true;
+        while (isRunning()) {
+            queue.put(new Event() {  });
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+
         }
+    }
+
+    @Override
+    public void stop() {
+        if(isRunning()){
+            System.out.println("Stopping generator");
+            running = false;
+        }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
     }
 }

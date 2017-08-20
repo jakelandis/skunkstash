@@ -13,9 +13,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.stream.IntStream;
 
 public class App {
@@ -51,7 +49,7 @@ public class App {
 //        URLClassLoader loader = URLClassLoader.newInstance(new URL[] {new URL("file:///Users/jake/workspace/skunkstash/input/target/input-1.0-SNAPSHOT.jar")}); //via jar
 
         //via .class, don't forget the trailing /
-        URLClassLoader inputLoader = URLClassLoader.newInstance(new URL[]{ new URL("file:///Users/jake/workspace/skunkstash/input/target/classes/")});
+        URLClassLoader inputLoader = URLClassLoader.newInstance(new URL[]{new URL("file:///Users/jake/workspace/skunkstash/input/target/classes/")});
         URLClassLoader outputLoader = URLClassLoader.newInstance(new URL[]{
                 new URL("file:///Users/jake/workspace/skunkstash/filter/target/classes/"),
                 new URL("file:///Users/jake/workspace/skunkstash/output/target/classes/")});
@@ -90,18 +88,66 @@ public class App {
         }
         System.out.println(String.format("Found %d inputs, %d filters, %d outputs", inputClasses.size(), filterClasses.size(), outputClasses.size()));
 
+        List<Input> inputs = new ArrayList<>();
         //Each input gets its own thread
         ExecutorService inputExecutorService = Executors.newFixedThreadPool(inputClasses.size(), new PluginThreadFactory("input", inputLoader));
         for (Class<?> clazz : inputClasses) {
             Input input = (Input) clazz.newInstance();
+            inputs.add(input);
             inputExecutorService.execute(() -> input.start(config, writeQueue));
         }
 
+        List<Processor> processors = new ArrayList<>();
         //a thread for each worker
         ExecutorService processingExecutorService = Executors.newFixedThreadPool(workers, new PluginThreadFactory("output", outputLoader));
         IntStream.of(workers).forEach(__ -> {
             Processor processor = new Processor(config, filters, outputs, queue);
+            processors.add(processor);
             processingExecutorService.execute(() -> processor.start());
         });
+
+
+        //Shutdown hook to allow for call to stop
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+
+            System.out.println("Shutting down inputs...");
+            inputs.forEach(input -> input.stop());
+            shutdown(inputExecutorService, "inputs");
+
+            System.out.println("Shutting down outputs...");
+            processors.forEach(p -> p.stop());
+            shutdown(processingExecutorService, "outputs");
+
+            System.out.println("Bye Bye...");
+        }));
+
     }
+
+
+    /**
+     * Attempt to clean shutdown, after a bit, interrupt the thread
+     */
+    public static void shutdown(ExecutorService service, String name) {
+        try {
+            service.shutdown();
+            int max_wait = 10;
+            int i = 0;
+            while (i++ < max_wait) {
+                System.out.println("Waiting for the " + name + " to terminate...");
+                if (service.awaitTermination(1, TimeUnit.SECONDS)) {
+                    break;
+                }
+            }
+            if (i >= max_wait) {
+                //knock knock, whose there? , interrupting thread, interrupting thread who ?
+                service.shutdownNow();
+                if (!service.awaitTermination(1, TimeUnit.SECONDS)) {
+                    System.out.println("Shut down of " + name + " not stop cleanly after " + max_wait + " seconds");
+                }
+            }
+        } catch (InterruptedException e) {
+            //do nothing
+        }
+    }
+
 }

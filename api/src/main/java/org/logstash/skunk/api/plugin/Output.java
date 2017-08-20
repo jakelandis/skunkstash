@@ -7,9 +7,9 @@ public interface Output {
 
     void start(Configuration configuration);
 
-    default void stop(){
-        //do nothing
-    }
+    void stop();
 
     void stash(Event event);
+
+    boolean isRunning();
 }

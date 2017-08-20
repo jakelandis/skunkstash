@@ -7,8 +7,7 @@ public interface Input {
 
     void start(Configuration configuration, WriteQueue queue);
 
-    default void stop(){
-        //do nothing
-    }
+    void stop();
 
+    boolean isRunning();
 }

@@ -14,6 +14,7 @@ public class Processor {
     private final List<Output> output;
     private final Configuration configuration;
     private final Queue<Event> queue;
+    boolean run;
 
     public Processor(Configuration configuration, List<Filter> filters, List<Output> output, Queue<Event> queue) {
         this.filters = filters;
@@ -22,23 +23,30 @@ public class Processor {
         this.queue = queue;
     }
 
-    public void start(){
+    public void start() {
+        run = true;
         output.forEach(o -> o.start(configuration));
-        while(true){
+        while (run) {
             Event event = queue.peek();
             filter(event, filters.iterator());
-            if(event != null){
+            if (event != null) {
                 output.forEach(o -> o.stash(event));
             }
             queue.poll();
         }
     }
 
-    private Event filter(Event event, Iterator<Filter> it){
-        if(event != null && it.hasNext()){
+    private Event filter(Event event, Iterator<Filter> it) {
+        if (event != null && it.hasNext()) {
             filter(it.next().filter(event), it);
         }
         return event;
+    }
+
+    public void stop() {
+        System.out.println("Stopping processor");
+        output.stream().filter(o->o.isRunning()).forEach(o -> o.stop());
+        run = false;
     }
 
 }
