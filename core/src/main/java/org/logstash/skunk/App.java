@@ -6,18 +6,17 @@ import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.WriteQueue;
 import org.logstash.skunk.api.plugin.Filter;
 import org.logstash.skunk.api.plugin.Input;
+import org.logstash.skunk.api.plugin.LogStashPlugin;
 import org.logstash.skunk.api.plugin.Output;
 import org.reflections.Reflections;
 
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
+import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
 
 public class App {
-    public static void main(String[] args) throws IllegalAccessException, InstantiationException, MalformedURLException, ClassNotFoundException {
+    public static void main(String[] args) throws IllegalAccessException, InstantiationException, MalformedURLException, ClassNotFoundException, URISyntaxException {
 
         Queue queue = new ArrayBlockingQueue<Event>(1024);
         int workers = 2;
@@ -36,23 +35,27 @@ public class App {
         Configuration config = new Configuration() {
         };
 
-        //This strategy can be adapted to .zip files in well known named directories, then programmatically un-zip , add the .jar files to the URL class loader.
-        //Instead of 1 class loader for all the plugins, there should be 1 class loader per .zip , need to keep track of which loader is in use so we can set the correct loader
-        // on the Thread context.
+        //This strategy can be adapted to loading jars from .zip files in well known named directories, then programmatically un-zip to a staging location, add the .jar files to
+        // the class path via the the URL class loader.
+
+        //Instead of 1 class loader for the inputs and one for the outputs, there should be 1 class loader per .zip, A zip may contain inputs, outputs, and filters and thus
+        // should all use the same loader. Logic will need to be added to know the grouping so that we can correctly set the thread Context class loader.
 
 
-        //Note - AS-IS this is a parent first class loader, meaning that any all classes be loaded from the parent. This means that while the plugins are isolated from each
-        // other (once we use a class loader per zip), they are not isolated from the dependencies of the main app. e.g. if core depends on jackson 2.7, then all plugins will
-        // only have access to that version. We should provide an option to use a (custom) child first class loader policy to allow plugins to optionally override versions in
-        // core. There may be security concerns there though...not sure.
+        //By default this (Java) is a parent first class loader, meaning that any all classes be attempted be loaded from the parent class loader first . This means that while the
+        // plugins are isolated from each other, they are not isolated from the dependencies of the main app. e.g. if core depends on jackson 2.7, then all plugins will
+        // have to use that version, and any version they ship with will be ignored. We should provide an option to use a child first class loader strategy to allow
+        // plugins to optionally override versions in core.
 
 //        URLClassLoader loader = URLClassLoader.newInstance(new URL[] {new URL("file:///Users/jake/workspace/skunkstash/input/target/input-1.0-SNAPSHOT.jar")}); //via jar
 
+        URI baseURI = App.class.getClassLoader().getResource(".").toURI().resolve("../../../");
+
         //via .class, don't forget the trailing /
-        URLClassLoader inputLoader = URLClassLoader.newInstance(new URL[]{new URL("file:///Users/jake/workspace/skunkstash/input/target/classes/")});
+        URLClassLoader inputLoader = URLClassLoader.newInstance(new URL[]{baseURI.resolve("input/target/classes/").toURL()});
         URLClassLoader outputLoader = URLClassLoader.newInstance(new URL[]{
-                new URL("file:///Users/jake/workspace/skunkstash/filter/target/classes/"),
-                new URL("file:///Users/jake/workspace/skunkstash/output/target/classes/")});
+                baseURI.resolve("filter/target/classes/").toURL(),
+                baseURI.resolve("output/target/classes/").toURL()});
 
         //Find plugin via reflections
         Reflections reflections = new Reflections("org.logstash.skunk.plugin", inputLoader, outputLoader);
@@ -64,16 +67,24 @@ public class App {
 
         for (Class<?> clazz : plugins) {
             Class<?>[] interfaces = clazz.getInterfaces();
+            LogStashPlugin plugin = clazz.getAnnotation(LogStashPlugin.class);
+            String type = null;
             for (Class<?> i : interfaces) {
                 if ("org.logstash.skunk.api.plugin.Input".equals(i.getCanonicalName())) {
                     inputClasses.add(clazz);
+                    type= "input";
                 } else if ("org.logstash.skunk.api.plugin.Filter".equals(i.getCanonicalName())) {
                     filterClasses.add(clazz);
+                    type= "filter";
                 } else if ("org.logstash.skunk.api.plugin.Output".equals(i.getCanonicalName())) {
                     outputClasses.add(clazz);
+                    type= "output";
                 }
+
+                System.out.println("Found " + type + " plugin \"" + plugin.value() + "\" (singleton=" + plugin.singleton() + ")");
             }
         }
+
 
         List<Filter> filters = new ArrayList<>();
         for (Class<?> clazz : filterClasses) {
