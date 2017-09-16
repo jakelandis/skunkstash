@@ -1,41 +1,44 @@
 package org.logstash.skunk.plugin.input;
 
-import org.logstash.skunk.api.config.Configuration;
 import org.logstash.skunk.api.event.Event;
-import org.logstash.skunk.api.event.WriteQueue;
 import org.logstash.skunk.api.plugin.Input;
-import org.logstash.skunk.api.plugin.LogStashPlugin;
+import org.logstash.skunk.api.plugin.InputConsumer;
+import org.logstash.skunk.api.plugin.Plugin;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
 
 
-@LogStashPlugin("generator")
+@Plugin("generator")
 public class Generator implements Input {
 
     boolean running;
 
     @Override
-    public void start(Configuration configuration, WriteQueue queue){
+    public void start(InputConsumer consumer) {
         running = true;
-        while (isRunning()) {
-            queue.put(new Event() {  });
+        while (running) {
+            consumer.accept(Collections.singleton(new Event(){
+                private LocalDateTime dateTime = LocalDateTime.now();
+
+                @Override
+                public LocalDateTime getTimestamp() {
+                    return dateTime;
+                }
+            }));
             try {
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
         }
     }
 
     @Override
     public void stop() {
-        if(isRunning()){
+        if(running){
             System.out.println("Stopping generator");
             running = false;
         }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running;
     }
 }

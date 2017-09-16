@@ -1,39 +1,37 @@
 package org.logstash.skunk.plugin.output;
 
-import org.logstash.skunk.api.config.Configuration;
-import org.logstash.skunk.api.event.Event;
-import org.logstash.skunk.api.plugin.Filter;
-import org.logstash.skunk.api.plugin.LogStashPlugin;
+import org.logstash.skunk.api.event.EventBatch;
 import org.logstash.skunk.api.plugin.Output;
+import org.logstash.skunk.api.plugin.Plugin;
 
-import java.util.List;
+import java.time.format.DateTimeFormatter;
 
-@LogStashPlugin("stdout")
+@Plugin("stdout")
 public class StdOut implements Output {
 
 
     boolean running;
 
+    private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+
     @Override
-    public void start(Configuration configuration) {
+    public void start() {
         running = true;
     }
 
     @Override
     public void stop() {
-        if (isRunning()) {
+        if (running) {
             System.out.println("Stopping stdout");
             running = false;
         }
     }
 
     @Override
-    public void stash(Event event) {
-        System.out.println(event.hashCode());
+    public void stash(EventBatch events) {
+        while (events.hasNext()) {
+            System.out.println(formatter.format(events.next().getTimestamp()));
+        }
     }
 
-    @Override
-    public boolean isRunning() {
-        return running;
-    }
 }

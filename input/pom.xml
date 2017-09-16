@@ -43,12 +43,21 @@
                 <artifactId>api</artifactId>
                 <version>1.0-SNAPSHOT</version>
             </dependency>
+            <dependency>
+                <groupId>org.logstash.skunk</groupId>
+                <artifactId>config-sink</artifactId>
+                <version>1.0-SNAPSHOT</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.logstash.skunk</groupId>
             <artifactId>api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.logstash.skunk</groupId>
+            <artifactId>config-sink</artifactId>
         </dependency>
 
     </dependencies>

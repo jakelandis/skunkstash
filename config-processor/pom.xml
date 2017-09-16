@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.logstash.skunk</groupId>
-    <artifactId>outputs</artifactId>
+    <artifactId>config-sink</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -31,25 +31,12 @@
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
+                    <!-- Disable annotation processing for ourselves. -->
+                    <compilerArgument>-proc:none</compilerArgument>
                 </configuration>
             </plugin>
         </plugins>
     </build>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.logstash.skunk</groupId>
-                <artifactId>api</artifactId>
-                <version>1.0-SNAPSHOT</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>org.logstash.skunk</groupId>
-            <artifactId>api</artifactId>
-        </dependency>
 
-    </dependencies>
 </project>
