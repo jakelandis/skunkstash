@@ -1,10 +1,12 @@
 package org.logstash.skunk.plugin.output;
 
+import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.EventBatch;
 import org.logstash.skunk.api.plugin.Output;
 import org.logstash.skunk.api.plugin.Plugin;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 
 @Plugin("stdout")
 public class StdOut implements Output {
@@ -29,8 +31,17 @@ public class StdOut implements Output {
 
     @Override
     public void stash(EventBatch events) {
-        while (events.hasNext()) {
-            System.out.println(formatter.format(events.next().getTimestamp()));
+        if (events != null) {
+            while (events.hasNext()) {
+                System.out.println("********************");
+                Event event = events.next();
+                System.out.println(formatter.format(event.getTimeStamp()));
+                for (Map.Entry<Object, Object> entry : event.getValues().entrySet()) {
+                    Object key = entry.getKey();
+                    Object value = entry.getValue();
+                    System.out.println(key + " :: " + value);
+                }
+            }
         }
     }
 

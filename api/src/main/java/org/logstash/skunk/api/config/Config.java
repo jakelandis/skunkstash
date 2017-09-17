@@ -1,10 +1,8 @@
-package org.logstash.skunk.config;
+package org.logstash.skunk.api.config;
 
 import java.lang.annotation.*;
 
-/**
- * TODO:
- */
+
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)

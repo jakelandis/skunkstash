@@ -1,12 +1,14 @@
 package org.logstash.skunk.plugin.input;
 
 import org.logstash.skunk.api.event.Event;
+import org.logstash.skunk.api.event.EventImpl;
 import org.logstash.skunk.api.plugin.Input;
 import org.logstash.skunk.api.plugin.InputConsumer;
 import org.logstash.skunk.api.plugin.Plugin;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.UUID;
 
 
 @Plugin("generator")
@@ -18,16 +20,12 @@ public class Generator implements Input {
     public void start(InputConsumer consumer) {
         running = true;
         while (running) {
-            consumer.accept(Collections.singleton(new Event(){
-                private LocalDateTime dateTime = LocalDateTime.now();
-
-                @Override
-                public LocalDateTime getTimestamp() {
-                    return dateTime;
-                }
-            }));
+            Event event = new EventImpl();
+            event.setTimeStamp(LocalDateTime.now());
+            event.addValue("message", UUID.randomUUID().toString());
+            consumer.accept(Collections.singleton(event));
             try {
-                Thread.sleep(1000);
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
