@@ -53,6 +53,13 @@ public class App {
         }
 
 
+        Map<String, Object> dropperConfig = new HashMap<>();
+        configuration.put("org.logstash.skunk.plugin.processors.Dropper", dropperConfig);
+        List<String> list = new ArrayList<>(Arrays.asList("a", "b", "c"));
+//        List<Integer> list = new ArrayList<>(Arrays.asList(1,2,3));
+        dropperConfig.put("test", list);
+
+
         int workers = 2;
 
 

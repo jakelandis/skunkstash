@@ -1,11 +1,13 @@
 package org.logstash.skunk.plugin.processors;
 
+import org.logstash.skunk.api.config.Config;
 import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.EventBatch;
 import org.logstash.skunk.api.event.EventQueue;
 import org.logstash.skunk.api.plugin.Plugin;
 import org.logstash.skunk.api.plugin.Processor;
 
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
@@ -16,6 +18,9 @@ public class Dropper implements Processor {
 
     private boolean toggle;
 
+    public Dropper(@Config("test")List<String> list){
+        list.forEach(s -> System.out.println(s));
+    }
 
     @Override
     public EventBatch process(EventBatch events) {
