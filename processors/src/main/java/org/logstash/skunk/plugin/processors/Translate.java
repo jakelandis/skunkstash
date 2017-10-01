@@ -1,63 +1,40 @@
 package org.logstash.skunk.plugin.processors;
 
+
 import org.logstash.skunk.api.config.Config;
 import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.EventBatch;
 import org.logstash.skunk.api.event.EventQueue;
+import org.logstash.skunk.api.plugin.Obsoleted;
+import org.logstash.skunk.api.plugin.Deprecated;
 import org.logstash.skunk.api.plugin.Plugin;
 import org.logstash.skunk.api.plugin.Processor;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 
 @Plugin("translate")
-public class Translate implements Processor {
+final public class Translate implements Processor {
+
+    @Config("dictionary") private Map<String, Object> dictionary;
+    @Config("dictionary_path") private String dictionaryPathAsString;
+    @Config("destination") private String destination;
+    @Config("exact") private boolean exact;
+    @Config("override") private boolean override;
+    @Config("regex") private boolean regex;
+    @Config("fallback") private String fallBack;
+    @Config("refresh_interval") private int refreshInterval;
+
+    @Obsoleted("This value is no longer supported and will do nothing if set.")
+    @Config("legacy") private boolean legacy;
+
+    @Deprecated("This value is has been replaced by regex")
+    @Config("regular_expression") private boolean regularExpression;
 
 
-    private final Map<String, Object> dictionary;
-    private final Path dictionaryPath;
-    private final String destination;
-    private final boolean exact;
-    private final boolean override;
-    private final boolean regex;
-    private final String fallBack;
-    private final int refreshInterval;
-
-
-    public Translate(@Config("dictionary") Map<String, Object> dictionary,
-                     @Config("destination") String destination,
-                     @Config("exact") boolean exact,
-                     @Config("override") boolean override,
-                     @Config("regex") boolean regex,
-                     @Config("fallback") String fallBack) {
-        this.dictionary = dictionary;
-        this.dictionaryPath = null;
-        this.destination = destination;
-        this.exact = exact;
-        this.override = override;
-        this.regex = regex;
-        this.fallBack = fallBack;
-        this.refreshInterval = -1;
-    }
-
-    public Translate(@Config("dictionary_path") Path dictionaryPath,
-                     @Config("refresh_interval") int refreshInterval,
-                     @Config("destination") String destination,
-                     @Config("exact") boolean exact,
-                     @Config("override") boolean override,
-                     @Config("regex") boolean regex,
-                     @Config("fallback") String fallBack) {
-        this.dictionary = null;
-        this.dictionaryPath = dictionaryPath;
-        this.refreshInterval = refreshInterval;
-        this.destination = destination;
-        this.exact = exact;
-        this.override = override;
-        this.regex = regex;
-        this.fallBack = fallBack;
-    }
-
+    private Path dictionaryPath;
 
     @Override
     public EventBatch process(EventBatch events) {
@@ -72,10 +49,18 @@ public class Translate implements Processor {
             event.addValue("exact", exact);
             event.addValue("override", override);
             event.addValue("fallback", fallBack);
+            event.addValue("regex", regex);
+            event.addValue("regular_expression", regularExpression);
             processedEventQueue.add(event);
-
         }
         return processedEventQueue;
+    }
 
+    @Override
+    public void initialize() {
+        System.out.println("Initializing...");
+
+        //any transformations or validation of configuration should happen here
+        dictionaryPath = new File(dictionaryPathAsString).toPath();
     }
 }

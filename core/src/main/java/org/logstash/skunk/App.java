@@ -4,16 +4,15 @@ package org.logstash.skunk;
 import org.logstash.skunk.api.config.Config;
 import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.EventQueue;
-import org.logstash.skunk.api.plugin.Input;
-import org.logstash.skunk.api.plugin.Output;
-import org.logstash.skunk.api.plugin.Plugin;
-import org.logstash.skunk.api.plugin.Processor;
+import org.logstash.skunk.api.plugin.Deprecated;
+import org.logstash.skunk.api.plugin.*;
 import org.reflections.Reflections;
+import org.reflections.scanners.FieldAnnotationsScanner;
+import org.reflections.scanners.SubTypesScanner;
+import org.reflections.scanners.TypeAnnotationsScanner;
 
-import java.io.File;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Field;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -41,12 +40,14 @@ public class App {
         translateConfig.put("override", false);
         translateConfig.put("regex", false);
         translateConfig.put("fallback", "fallbackValue");
+        translateConfig.put("legacy", true);
+        translateConfig.put("regular_expression", true);
 
         //change this to use the other constructor
         boolean useFile = true;
 
         if (useFile) {
-            translateConfig.put("dictionary_path", new File("/tmp").toPath());
+            translateConfig.put("dictionary_path", "tmp");
             translateConfig.put("refresh_interval", 99);
         } else {
             translateConfig.put("dictionary", new HashMap<String, Object>());
@@ -55,9 +56,7 @@ public class App {
 
         Map<String, Object> dropperConfig = new HashMap<>();
         configuration.put("org.logstash.skunk.plugin.processors.Dropper", dropperConfig);
-        List<String> list = new ArrayList<>(Arrays.asList("a", "b", "c"));
-//        List<Integer> list = new ArrayList<>(Arrays.asList(1,2,3));
-        dropperConfig.put("test", list);
+        dropperConfig.put("toggle_start", false);
 
 
         int workers = 2;
@@ -86,13 +85,15 @@ public class App {
                 baseURI.resolve("output/target/classes/").toURL()});
 
         //Find plugin via reflections
-        Reflections reflections = new Reflections("org.logstash.skunk.plugin", inputLoader, outputLoader);
+        Reflections reflections = new Reflections("org.logstash.skunk.plugin", new SubTypesScanner(), new TypeAnnotationsScanner(), new FieldAnnotationsScanner(), inputLoader,
+                outputLoader);
         Set<Class<?>> plugins = reflections.getTypesAnnotatedWith(Plugin.class);
         Set<Class<?>> inputClasses = new HashSet<>();
         Set<Class<?>> processorClasses = new HashSet<>();
         Set<Class<?>> outputClasses = new HashSet<>();
 
 
+        //TODO: Handle deprecated and obsoleted for plugins
         for (Class<?> clazz : plugins) {
             Class<?>[] interfaces = clazz.getInterfaces();
             Plugin plugin = clazz.getAnnotation(Plugin.class);
@@ -117,84 +118,49 @@ public class App {
         List<Processor> processors = new ArrayList<>();
         //Reflections based constructor injection for configuration.
         for (Class<?> clazz : processorClasses) {
-            boolean constructed = false;
             Constructor<?>[] constructors = clazz.getConstructors();
-            Map<String, ?> pluginConfig = configuration.get(clazz.getCanonicalName());
 
             //zero arg default constructor
             if (constructors.length == 1 && constructors[0].getParameterCount() == 0) {
                 Processor processor = (Processor) clazz.newInstance();
+                //set the configuration
+                Set<Field> fields = reflections.getFieldsAnnotatedWith(Config.class);
+
+                Map<String, ?> configMap = configuration.get(clazz.getCanonicalName());
+                fields.stream().filter(f -> f.getDeclaringClass().equals(clazz)).forEach(field ->
+                        {
+                            field.setAccessible(true);
+
+                            try {
+                                String obsoletedMessage = field.getAnnotation(Obsoleted.class) == null ? "" : field.getAnnotation(Obsoleted.class).value();
+                                if (!obsoletedMessage.isEmpty()) {
+                                    System.out.println("Not setting value for " + field.getName() + " : " + obsoletedMessage);
+
+                                } else {
+                                    String deprecatedMessage = field.getAnnotation(Deprecated.class) == null ? "" : field.getAnnotation(Deprecated.class).value();
+                                    if (!deprecatedMessage.isEmpty()) {
+                                        System.out.println("Warning deprecated value: " + field.getName() + " : " + deprecatedMessage);
+
+                                    }
+                                    field.set(processor, configMap.get(field.getAnnotation(Config.class).value()));
+                                }
+
+                            } catch (IllegalAccessException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                );
+
+                processor.initialize();
                 processors.add(processor);
-                constructed = true;
+
             } else {
-                //Find the matching constructor
-                for (Constructor constructor : constructors) {
-                    Annotation[][] annotations = constructor.getParameterAnnotations();
+                //Non default
+                throw new IllegalStateException("Non default constructors are not allowed");
 
-                    //pull the config annotations
-                    List<String> annotationParams = new ArrayList<>();
-                    for (int i = 0; i < annotations.length; i++) {
-
-                        //ensure that non-default constructors only have the @Config paramaters
-                        if (annotations[i].length == 0 || !Config.class.equals(annotations[i][0].annotationType())) {
-                            throw new IllegalStateException("Non default constructors must only have @Config(\"name\") parameters");
-                        }
-                        annotationParams.add(((Config) annotations[i][0]).value());
-                    }
-
-                    //check based on size
-                    if (constructor.getParameterCount() != annotationParams.size() || constructor.getParameterCount() != pluginConfig.size()) {
-                        //not a match based on size...move along
-                        System.out.println("No match based on count. parameter count: " + constructor.getParameterCount() + ", annotation count: " + annotationParams.size() +
-                                ", plugin config count: " + pluginConfig.size());
-                        continue;
-                    }
-
-                    //check based on keys
-                    Set<String> configKeys = pluginConfig.keySet();
-                    Set<String> annotationKeys = new HashSet<>(annotationParams);
-                    if (!configKeys.equals(annotationKeys)) {
-                        //not a match based on keys ... move along
-                        System.out.println("No match based on keys. configKeys: " + Arrays.toString(configKeys.toArray()) + " annotationKeys: " + Arrays.toString(annotationKeys
-                                .toArray()));
-                        continue;
-                    }
-
-                    boolean match = false;
-                    //check based on type, and grab the values if types are good
-                    List<Object> params = new ArrayList<>();
-                    for (int i = 0; i < constructor.getParameterTypes().length; i++) {
-                        Class paramaterType = primitiveToObject(constructor.getParameterTypes()[i]);
-                        String keyName = annotationParams.get(i);
-                        Object configValue = pluginConfig.get(keyName);
-                        if (paramaterType.isAssignableFrom(primitiveToObject(configValue.getClass()))) {
-                            match = true;
-                        } else {
-                            System.out.println("No match based on type. parameter type: '" + paramaterType.getCanonicalName() + "', config value: '" + configValue.getClass()
-                                    .getCanonicalName() + "'");
-                            continue;
-                        }
-                        params.add(configValue);
-                    }
-
-                    if (match) {
-                        //if it made it this far, we found a match!
-                        System.out.println("FOUND A MATCH! constructing....");
-                        try {
-                            System.out.println("Construction with constructor keys: " + Arrays.toString(annotationParams.toArray()) + ", parameters: " + Arrays.toString(params
-                                    .toArray()));
-                            processors.add((Processor) constructor.newInstance(params.toArray()));
-                            constructed = true;
-                        } catch (InvocationTargetException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
             }
 
-            if (!constructed) {
-                System.out.println("****************** WARNING '" + clazz.getCanonicalName() + "' is not constructed ***************");
-            }
+
         }
 
         List<Output> outputs = new ArrayList<>();
@@ -254,29 +220,7 @@ public class App {
     }
 
 
-    private static Class<?> primitiveToObject(Class<?> type) {
-        if (!type.isPrimitive())
-            return type;
-        else if (int.class.equals(type))
-            return Integer.class;
-        else if (double.class.equals(type))
-            return Double.class;
-        else if (char.class.equals(type))
-            return Character.class;
-        else if (boolean.class.equals(type))
-            return Boolean.class;
-        else if (long.class.equals(type))
-            return Long.class;
-        else if (float.class.equals(type))
-            return Float.class;
-        else if (short.class.equals(type))
-            return Short.class;
-        else if (byte.class.equals(type))
-            return Byte.class;
-        else
-            //should't happen
-            throw new IllegalArgumentException("primitive type not supported " + type.getName());
-    }
+
 
     /**
      * Attempt to clean shutdown, after a bit, interrupt the thread

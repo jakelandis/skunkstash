@@ -1,26 +1,23 @@
 package org.logstash.skunk.plugin.processors;
 
 import org.logstash.skunk.api.config.Config;
+import org.logstash.skunk.api.plugin.Deprecated;
 import org.logstash.skunk.api.event.Event;
 import org.logstash.skunk.api.event.EventBatch;
 import org.logstash.skunk.api.event.EventQueue;
 import org.logstash.skunk.api.plugin.Plugin;
 import org.logstash.skunk.api.plugin.Processor;
 
-import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
  * Drops every other event
  */
 @Plugin("dropper")
+@Deprecated("This plugin will no longer be supported")
 public class Dropper implements Processor {
 
-    private boolean toggle;
-
-    public Dropper(@Config("test")List<String> list){
-        list.forEach(s -> System.out.println(s));
-    }
+    @Config("toggle_start") boolean toggle;
 
     @Override
     public EventBatch process(EventBatch events) {
